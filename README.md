@@ -1,6 +1,7 @@
 Face-Recognition-Web-App
 
 SERVER
+
 1.
 git clone https://github.com/shachar08-work/Face-Recognition-Web-App
 cd Face-Recognition-Web-App
