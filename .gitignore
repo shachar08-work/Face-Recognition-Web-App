@@ -1,0 +1,22 @@
+# Node.js stuff in client/
+client/node_modules/
+client/build/
+
+# Python stuff in server/
+server/__pycache__/
+server/*.pyc
+server/venv/
+server/.env
+server/album_embeddings/
+server/selfies/
+server/albums/
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+
+# Other temp files
+*.tmp
+*.cache
