@@ -12,11 +12,16 @@ from dotenv import load_dotenv
 from pathlib import Path
 from io import BytesIO
 from utils import create_model, cosine_similarity, augment_selfie, preprocess_image, get_face_embeddings, verify_directory_is_album, learn_album, l2_normalize
+from models import Code, PklMetadata, SelfieMetadata, FolderPath
 
 # Load environment variables
 load_dotenv()
 MONGO_URI = os.getenv("MONGO_URI")
 DB_NAME = os.getenv("DB_NAME")
+OWNER_CODE = os.getenv("OWNER_CODE")
+
+# local directories names
+ALBUM_EMBEDDING_FOLDER = "album_embeddings"
 
 # MongoDB connection
 client = MongoClient(MONGO_URI)
@@ -39,25 +44,6 @@ ALBUM_DIR = "albums"
 SELFIE_DIR = "selfies"
 os.makedirs(ALBUM_DIR, exist_ok=True)
 os.makedirs(SELFIE_DIR, exist_ok=True)
-
-
-# MODELS
-class Code(BaseModel):
-    code: str
-    weddingname: str
-
-class PklMetadata(BaseModel):
-    album_code: str
-    embedded_models: List[bytes]
-
-class SelfieMetadata(BaseModel):
-    filename: str
-    album_code: str
-    matches: List[str]
-
-class FolderPath(BaseModel):
-    path: str
-    name: str
 
 
 # UTIL
@@ -107,23 +93,27 @@ def match_selfie_against_each_model(selfie_img, pkl_blobs_by_model: dict, thresh
     return list(set(all_matches))
 
 
+def clean_databases():
+    codes_collection.delete_many({})
+    pkls_collection.delete_many({})
+    selfies_collection.delete_many({})
 
 # ROUTES
 
 @app.post("/validate-code")
 def validate_code(code: str = Form(...)):
-    if code == "skorall":
+    if code == OWNER_CODE:
         return {"owner": True}
     found = codes_collection.find_one({"code": code})
     if found:
         return {"owner": False, "valid": True, "weddingname": found.get("weddingname")}
     raise HTTPException(status_code=404, detail="Code not found")
 
-
+# JbVAW
 @app.post("/receive-directory-path")
 async def receive_folder_path(data: FolderPath):
     directory_path = data.path
-    embedding_folder = "album_embeddings"
+    embedding_folder = ALBUM_EMBEDDING_FOLDER
     if verify_directory_is_album(directory_path):
         print("good directory")
         code = learn_album(directory_path, embedding_folder)  # returns code
@@ -147,10 +137,12 @@ async def receive_folder_path(data: FolderPath):
         }
         pkls_collection.insert_one(metadata)
         codes_collection.insert_one(codemetadata)
+        shutil.rmtree(folder)
+        return {"message": "Path received", "album_code": code}
 
     else:
         print("bad directory")
-    return {"message": "Path received"}
+    return {"message": "Bad path received"}
 
 
 @app.post("/upload-owner-data")
@@ -163,8 +155,48 @@ async def upload_owner_data(code: str = Form(...), files: List[UploadFile] = Fil
     return {"status": "success", "message": f"{len(model_data)} pkl files uploaded"}
 
 
+# @app.post("/upload-selfie")
+# async def upload_selfie(code: str = Form(...), file: UploadFile = File(...)):
+#     # Validate album code exists
+#     found = codes_collection.find_one({"code": code})
+#     if not found:
+#         raise HTTPException(status_code=404, detail="Album code not found")
+
+#     selfie_path = os.path.join(SELFIE_DIR, file.filename)
+#     with open(selfie_path, "wb") as buffer:
+#         shutil.copyfileobj(file.file, buffer)
+#     img = cv2.imread(selfie_path)
+#     if img is None:
+#         raise HTTPException(status_code=400, detail="Invalid image file")
+
+#     album_doc = pkls_collection.find_one({"album_code": code})
+#     if not album_doc or "embedded_models" not in album_doc:
+#         raise HTTPException(status_code=404, detail="Album embeddings not found")
+
+#     # Build dict: model_type -> pkl blob
+#     pkl_blobs_by_model = {
+#         entry["model_type"]: entry["data"] for entry in album_doc["embedded_models"]
+#     }
+
+#     matches = match_selfie_against_each_model(img, pkl_blobs_by_model, threshold=0.4)
+
+#     # Save selfie metadata
+#     metadata = SelfieMetadata(filename=file.filename, album_code=code, matches=matches)
+#     selfies_collection.insert_one(metadata.dict())
+
+#     return {"status": "success", "matches": matches}
+
+
+
+from datetime import datetime
+
 @app.post("/upload-selfie")
-async def upload_selfie(code: str = Form(...), file: UploadFile = File(...)):
+async def upload_selfie(
+    code: str = Form(...),
+    user_name: str = Form(...),
+    phone: str = Form(...),
+    file: UploadFile = File(...)
+):
     # Validate album code exists
     found = codes_collection.find_one({"code": code})
     if not found:
@@ -189,11 +221,18 @@ async def upload_selfie(code: str = Form(...), file: UploadFile = File(...)):
     matches = match_selfie_against_each_model(img, pkl_blobs_by_model, threshold=0.4)
 
     # Save selfie metadata
-    metadata = SelfieMetadata(filename=file.filename, album_code=code, matches=matches)
-    selfies_collection.insert_one(metadata.dict())
+    metadata = {
+        "filename": file.filename,
+        "album_code": code,
+        "matches": matches,
+        "uploaded_by": user_name,
+        "phone": phone,
+        "uploaded_at": datetime.utcnow()
+    }
+    selfies_collection.insert_one(metadata)
 
+    os.remove(selfie_path)
     return {"status": "success", "matches": matches}
-
 
 
 

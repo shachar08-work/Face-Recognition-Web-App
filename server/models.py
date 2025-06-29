@@ -1,9 +1,19 @@
 from pydantic import BaseModel
+from typing import List
 
 class Code(BaseModel):
     code: str
     weddingname: str
 
-class Selfie(BaseModel):
+class PklMetadata(BaseModel):
+    album_code: str
+    embedded_models: List[bytes]
+
+class SelfieMetadata(BaseModel):
     filename: str
-    code: str
+    album_code: str
+    matches: List[str]
+
+class FolderPath(BaseModel):
+    path: str
+    name: str

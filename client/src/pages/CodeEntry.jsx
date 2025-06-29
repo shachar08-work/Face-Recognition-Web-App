@@ -15,8 +15,9 @@ export default function CodeEntry() {
     try {
       const res = await API.post("/validate-code", new URLSearchParams({ code }));
       if (res.data.owner) {
-        setUser(code, "skorall");
+        setUser(code, "owner");
         navigate(`/owner`)
+
       }
       else {
         setUser(code, res.data.weddingname);  // Save to Zustand store

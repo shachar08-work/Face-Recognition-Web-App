@@ -208,4 +208,3 @@ def learn_album(album_path, output_path):
         save_cache(embeddings, pkl_path)
 
     return album_code
-

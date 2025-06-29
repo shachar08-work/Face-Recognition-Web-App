@@ -9,18 +9,21 @@ export default function OwnerUpload() {
   const [images, setImages] = useState([]);
   const [folderPath, setFolderPath] = useState("");
   const [status, setStatus] = useState("");
+  const [learningAlbum, setLearningAlbum] = useState(false);
   const [albumName, setAlbumName] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!folderPath || !albumName) return;
-
+    setLearningAlbum(true);
     try {
-      await API.post("/receive-directory-path", {
+      const res = await API.post("/receive-directory-path", {
         path: folderPath,
         name: albumName
       });
+      setCode(res.data.album_code);
       setStatus("נתיב התיקיה והשם נשלחו בהצלחה לשרת.");
+      setLearningAlbum(false);
       setProcessingDone(true);
     } catch {
       setStatus("שגיאה בשליחת הנתיב או השם.");
@@ -58,73 +61,69 @@ export default function OwnerUpload() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-900 px-4">
-      <div className="bg-gray-800 text-white rounded-2xl p-8 w-full max-w-md shadow-lg border border-gray-700">
-        <h1 className="text-2xl font-bold text-center mb-6">ניהול תיקיית אלבום</h1>
+  <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-700 flex items-center justify-center px-4 py-12">
+    <div className="bg-gray-900 text-white rounded-3xl shadow-2xl w-full max-w-xl p-10 border border-gray-700">
+      <h1 className="text-3xl font-extrabold text-center mb-6 tracking-wide text-white">
+        ניהול תיקיית אלבום
+      </h1>
 
-        <form onSubmit={handleSubmit} className="p-6 bg-gray-800 text-white max-w-md mx-auto rounded-lg mt-10">
-  <label>שם האלבום:</label>
-  <input
-    type="text"
-    value={albumName}
-    onChange={(e) => setAlbumName(e.target.value)}
-    placeholder="לדוגמה: חתונה של שחר"
-    className="w-full mt-2 p-2 rounded text-black"
-  />
+      <form
+        onSubmit={handleSubmit}
+        className="flex flex-col gap-6 text-white"
+      >
+        <div>
+          <label className="block mb-2 text-sm font-medium">
+            שם האלבום:
+          </label>
+          <input
+            type="text"
+            value={albumName}
+            onChange={(e) => setAlbumName(e.target.value)}
+            placeholder="לדוגמה: חתונה של שחר"
+            className="w-full px-4 py-3 rounded-xl bg-gray-800 border border-gray-600 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none text-white"
+          />
+        </div>
 
-  <label className="mt-4 block">הכנס נתיב תיקיה מלאה במחשב שלך:</label>
-  <input
-    type="text"
-    value={folderPath}
-    onChange={(e) => setFolderPath(e.target.value)}
-    placeholder="לדוגמה: C:\\Users\\Owner\\Pictures\\Album1"
-    className="w-full mt-2 p-2 rounded text-black"
-  />
+        <div>
+          <label className="block mb-2 text-sm font-medium">
+            נתיב תיקייה במחשב:
+          </label>
+          <input
+            type="text"
+            value={folderPath}
+            onChange={(e) => setFolderPath(e.target.value)}
+            placeholder="לדוגמה: C:\\Users\\Owner\\Pictures\\Album1"
+            className="w-full px-4 py-3 rounded-xl bg-gray-800 border border-gray-600 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none text-white"
+          />
+        </div>
 
-  <button type="submit" className="mt-4 px-4 py-2 bg-blue-600 rounded">
-    שלח נתיב ואלבום
-  </button>
+        <button
+          type="submit"
+          className="bg-blue-600 hover:bg-blue-700 text-white text-lg font-semibold py-3 rounded-xl transition transform hover:scale-105 shadow-md"
+        >
+          שלח נתיב ואלבום
+        </button>
 
-  {status && <p className="mt-2">{status}</p>}
-</form>
-
-        {processingDone ? (
-          <div>
-            <div className="mb-4">
-              <button
-                onClick={generateCode}
-                className="w-full py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition"
-              >
-                הפק קוד חדש
-              </button>
-              {code && (
-                <p className="text-center mt-2 text-lg font-mono">{code}</p>
-              )}
-            </div>
-
-            <form onSubmit={handleUploadPkl} className="flex flex-col gap-4">
-              <input
-                type="file"
-                accept=".pkl"
-                multiple
-                onChange={handlePklChange}
-                className="bg-gray-700 px-4 py-2 rounded-lg"
-              />
-
-              <button
-                type="submit"
-                className="py-3 bg-green-600 hover:bg-green-700 rounded-lg font-semibold transition"
-              >
-                העלה קבצי pkl
-              </button>
-            </form>
+        {/* Status + Code Messages */}
+        {(code || learningAlbum || status) && (
+          <div className="text-center mt-4 space-y-1">
+            {code && (
+              <p className="text-green-400 font-semibold text-lg">
+                ✅ קוד האלבום: {code}
+              </p>
+            )}
+            {learningAlbum && (
+              <p className="text-yellow-400 font-medium animate-pulse">
+                טוען...
+              </p>
+            )}
+            {status && (
+              <p className="text-blue-400 font-medium">{status}</p>
+            )}
           </div>
-        ) : null}
-
-        {status && (
-          <p className="mt-4 text-center text-yellow-300">{status}</p>
         )}
-      </div>
+      </form>
     </div>
-  );
+  </div>
+);
 }
