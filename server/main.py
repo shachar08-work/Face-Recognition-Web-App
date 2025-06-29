@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, Form, HTTPException, File
+from fastapi import FastAPI, UploadFile, Form, HTTPException, File, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pymongo import MongoClient
 from pydantic import BaseModel
@@ -13,6 +13,7 @@ from pathlib import Path
 from io import BytesIO
 from utils import create_model, cosine_similarity, augment_selfie, preprocess_image, get_face_embeddings, verify_directory_is_album, learn_album, l2_normalize
 from models import Code, PklMetadata, SelfieMetadata, FolderPath
+from datetime import datetime
 
 # Load environment variables
 load_dotenv()
@@ -47,6 +48,39 @@ os.makedirs(SELFIE_DIR, exist_ok=True)
 
 
 # UTIL
+
+def run_face_matching_and_cleanup(code: str, filename: str):
+    selfie_path = os.path.join(SELFIE_DIR, filename)
+    img = cv2.imread(selfie_path)
+    if img is None:
+        print(f"[!] Could not read image {filename}")
+        return
+
+    album_doc = pkls_collection.find_one({"album_code": code})
+    if not album_doc or "embedded_models" not in album_doc:
+        print(f"[!] Album embeddings missing for code {code}")
+        return
+
+    pkl_blobs_by_model = {
+        entry["model_type"]: entry["data"] for entry in album_doc["embedded_models"]
+    }
+
+    matches = match_selfie_against_each_model(img, pkl_blobs_by_model, threshold=0.4)
+
+    # Update DB with matches
+    selfies_collection.update_one(
+        {"filename": filename, "album_code": code},
+        {"$set": {"matches": matches}}
+    )
+    print("Done! Matches found:")
+    print(matches)
+
+    # Delete file after processing
+    try:
+        os.remove(selfie_path)
+    except Exception as e:
+        print(f"[!] Failed to delete file {selfie_path}: {e}")
+
 
 def match_selfie_against_each_model(selfie_img, pkl_blobs_by_model: dict, threshold=0.4):
     all_matches = []
@@ -155,43 +189,9 @@ async def upload_owner_data(code: str = Form(...), files: List[UploadFile] = Fil
     return {"status": "success", "message": f"{len(model_data)} pkl files uploaded"}
 
 
-# @app.post("/upload-selfie")
-# async def upload_selfie(code: str = Form(...), file: UploadFile = File(...)):
-#     # Validate album code exists
-#     found = codes_collection.find_one({"code": code})
-#     if not found:
-#         raise HTTPException(status_code=404, detail="Album code not found")
-
-#     selfie_path = os.path.join(SELFIE_DIR, file.filename)
-#     with open(selfie_path, "wb") as buffer:
-#         shutil.copyfileobj(file.file, buffer)
-#     img = cv2.imread(selfie_path)
-#     if img is None:
-#         raise HTTPException(status_code=400, detail="Invalid image file")
-
-#     album_doc = pkls_collection.find_one({"album_code": code})
-#     if not album_doc or "embedded_models" not in album_doc:
-#         raise HTTPException(status_code=404, detail="Album embeddings not found")
-
-#     # Build dict: model_type -> pkl blob
-#     pkl_blobs_by_model = {
-#         entry["model_type"]: entry["data"] for entry in album_doc["embedded_models"]
-#     }
-
-#     matches = match_selfie_against_each_model(img, pkl_blobs_by_model, threshold=0.4)
-
-#     # Save selfie metadata
-#     metadata = SelfieMetadata(filename=file.filename, album_code=code, matches=matches)
-#     selfies_collection.insert_one(metadata.dict())
-
-#     return {"status": "success", "matches": matches}
-
-
-
-from datetime import datetime
-
 @app.post("/upload-selfie")
 async def upload_selfie(
+    background_tasks: BackgroundTasks,
     code: str = Form(...),
     user_name: str = Form(...),
     phone: str = Form(...),
@@ -202,40 +202,25 @@ async def upload_selfie(
     if not found:
         raise HTTPException(status_code=404, detail="Album code not found")
 
+    # Save the uploaded selfie
     selfie_path = os.path.join(SELFIE_DIR, file.filename)
     with open(selfie_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
-    img = cv2.imread(selfie_path)
-    if img is None:
-        raise HTTPException(status_code=400, detail="Invalid image file")
 
-    album_doc = pkls_collection.find_one({"album_code": code})
-    if not album_doc or "embedded_models" not in album_doc:
-        raise HTTPException(status_code=404, detail="Album embeddings not found")
-
-    # Build dict: model_type -> pkl blob
-    pkl_blobs_by_model = {
-        entry["model_type"]: entry["data"] for entry in album_doc["embedded_models"]
-    }
-
-    matches = match_selfie_against_each_model(img, pkl_blobs_by_model, threshold=0.4)
-
-    # Save selfie metadata
+    # Save user info immediately
     metadata = {
         "filename": file.filename,
         "album_code": code,
-        "matches": matches,
+        "matches": None,  # to be updated later
         "uploaded_by": user_name,
         "phone": phone,
         "uploaded_at": datetime.utcnow()
     }
     selfies_collection.insert_one(metadata)
 
-    os.remove(selfie_path)
-    return {"status": "success", "matches": matches}
+    # Schedule face matching + file cleanup
+    background_tasks.add_task(run_face_matching_and_cleanup, code, file.filename)
 
-
-
-
+    return {"status": "uploaded"}
 
 

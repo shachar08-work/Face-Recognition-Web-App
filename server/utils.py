@@ -11,6 +11,7 @@ CACHE_DIR = "album_embeddings"
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 
+
 # def create_model(model_type="antelopev2"):
 #     model = insightface.app.FaceAnalysis(name=model_type, providers=["CPUExecutionProvider"])
 #     model.prepare(ctx_id=0, det_size=(640, 640))
@@ -89,25 +90,9 @@ def find_matches(selfie, album_embeddings, threshold=0.4):
                 if sim > threshold:
                     if filename not in matched_photos:
                         matched_photos.append(filename)
+                    break
             break
     return matched_photos
-
-
-# def build_album_embeddings(album_dir, model):
-#     embeddings_dict = {}
-#     print(album_dir)
-#     for filename in os.listdir(album_dir):
-#         if not filename.lower().endswith((".jpg", ".png", ".jpeg")):
-#             continue
-#         path = os.path.join(album_dir, filename)
-#         img = cv2.imread(path)
-#         if img is None:
-#             continue
-#         img = preprocess_image(img)
-#         embeddings = get_face_embeddings(img, model)
-#         if embeddings:
-#             embeddings_dict[filename] = embeddings
-#     return embeddings_dict
 
 
 def verify_directory_is_album(directory_path):
@@ -136,27 +121,7 @@ def createModel(modelType):
     model.prepare(ctx_id=1, det_size=(640, 640))  # Use GPU if available (ctx_id=0), CPU if ctx_id=-1
     return model
 
-# def build_album_embeddings(album_dir, model):
-#     album_embeddings = {}
-#     print("00000000")
-#     print(os.listdir(album_dir))
-#     for filename in os.listdir(album_dir):
-#         if not filename.lower().endswith(('.png', '.jpg', '.jpeg')):
-#             continue
-#         print("111111")
-#         path = os.path.join(album_dir, filename)
-#         print(f"📁 Caching {filename}...")
-#         img = cv2.imread(path)
 
-#         if img is None:
-#             print(f"[!] Cannot load {filename}")
-#             continue
-
-#         img = preprocess_image(img)
-#         embeddings = get_face_embeddings(img, model)
-#         if embeddings:
-#             album_embeddings[filename] = embeddings
-#     return album_embeddings
 
 def build_album_embeddings(album_dir, model):
     album_embeddings = {}
@@ -179,22 +144,6 @@ def save_cache(data, path):
         pickle.dump(data, f)
 
 
-
-# def learn_album(album_path, output_path):
-#     # model_types = ["buffalo_l", "buffalo_s", "antelopev2"]
-#     model_types = ["antelopev2"]
-#     album_code = generate_ascii_code(5)
-#     album_embedding_folder = os.path.join(output_path, album_code)
-#     os.makedirs(album_embedding_folder, exist_ok=True)
-#     for model_type in model_types:
-#         model = create_model(model_type)
-#         models_dict[model_type] = model
-#         pkl_name = "model-" + model_type + ".pkl"
-#         pkl_path = os.path.join(album_embedding_folder, pkl_name)
-#         album_embeddings = build_album_embeddings(album_path, model)
-#         save_cache(album_embeddings, pkl_path)
-#     return album_code
-
 def learn_album(album_path, output_path):
     model_types = ["buffalo_l", "buffalo_s", "antelopev2"]
     album_code = generate_ascii_code(5)
@@ -208,3 +157,5 @@ def learn_album(album_path, output_path):
         save_cache(embeddings, pkl_path)
 
     return album_code
+
+

@@ -2,10 +2,12 @@ import { useParams } from "react-router-dom";
 import { useState } from "react";
 import useUserStore from "../store";
 import API from "../api";
+import { useNavigate } from "react-router-dom";
 
 export default function UploadSelfie() {
   const { code } = useParams();
   const { name: weddingName } = useUserStore();
+  const navigate = useNavigate();
 
   const [file, setFile] = useState(null);
   const [userName, setUserName] = useState("");
@@ -31,10 +33,12 @@ export default function UploadSelfie() {
       setError("");
       setMatches(null);
 
-      const res = await API.post("/upload-selfie", formData);
-
-      setMatches(res.data.matches);
+      await API.post("/upload-selfie", formData);
       setFile(null);
+      setError("");
+      setMatches(null);
+      alert("נהדר! נעדכן אותך בהמשך לגבי התמונות בהן הופעת.");
+      navigate("/");
     } catch (err) {
       console.error(err);
       setError("העלאה נכשלה. נסה שוב.");
